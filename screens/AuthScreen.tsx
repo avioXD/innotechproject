@@ -1,16 +1,24 @@
 import React, { useEffect, useState } from "react";
-import { View , Image, Keyboard,   SafeAreaView, TextInput, TouchableOpacity } from "react-native";
-import { styles } from "../theme";
-import * as RootNavigation from '../RootNavigation.js';
-import { SvgCss } from 'react-native-svg';
-import { Ionicons } from '@expo/vector-icons';
-import { Button } from 'react-native-elements';
- 
-const xml = `
-<svg xmlns="http://www.w3.org/2000/svg"  >
-<path id="curved-back" d="M428,47.2V536.852a2.9,2.9,0,0,1-3,2.79H3a2.9,2.9,0,0,1-3-2.79V47.2c0-.758-10.968-44.04,74.95-65.062S428,46.444,428,47.2Z" transform="translate(0.454 21.197)" />
-</svg>
-`;
+import {
+  View,
+  Image,
+  SafeAreaView,
+  TextInput,
+  TouchableOpacity,
+  Text,
+  Keyboard,
+  ToastAndroid,
+} from "react-native";
+
+import * as RootNavigation from "../RootNavigation.js";
+import { SvgCss } from "react-native-svg";
+import { Button } from "react-native-elements";
+import { loginUser } from "../services/api";
+import { connect } from "react-redux";
+import { storeUserLocal } from "../services/asyncStorage";
+const emailRegex =
+  /^(([^<>()[\]\.,;:\s@\"]+(\.[^<>()[\]\.,;:\s@\"]+)*)|(\".+\"))@(([^<>()[\]\.,;:\s@\"]+\.)+[^<>()[\]\.,;:\s@\"]{2,})$/;
+const phoneNumberRegex = /\+?\d[\d -]{8,12}\d/;
 const googleLogin = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="308.132" height="57" viewBox="0 0 308.132 57">
 <defs>
   <pattern id="pattern" preserveAspectRatio="none" width="100%" height="100%" viewBox="0 0 100 100">
@@ -24,89 +32,174 @@ const googleLogin = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http:/
   <text id="Sign_in_with_Google" data-name="Sign in with Google" transform="translate(157 416.728)" fill="#fff" font-size="22" font-family="OpenSans-Bold, Open Sans" font-weight="700"><tspan x="0" y="24">Sign in with Google</tspan></text>
 </g>
 </svg>
-`
-export default function AuthScreen({params, route}) {
-    const theme = route.params.theme
-    const color = route.params.color
-    const [focus, setFocus] = useState(false)
-    const [creds, setCreds] = useState({
-      email: '',
-      password: ''
-    })
-     
-    useEffect(() => {
-      // Update the document title using the browser API
-      const showSubscription = Keyboard.addListener("keyboardDidShow", ()=>{
-        setFocus(true)
-      })
-      const hideSubscription = Keyboard.addListener("keyboardDidHide",()=>{
-        setFocus(false)
-      })
+`;
+
+function AuthScreen(props) {
+  const theme = props.route.params.theme;
+  const color = props.route.params.color;
+  const [focus, setFocus] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [creds, setCreds] = useState({
+    email: "",
+    password: "",
+  });
+
+  async function loginWithCreds() {
+    if (!creds.email) {
+      showToast("email/phone number invalid");
+    } else if (!creds.password) {
+      showToast("password empty");
+    } else if (
+      creds.email.match(emailRegex) ||
+      creds.email.match(phoneNumberRegex)
+    ) {
+      setLoading(true);
+
+      loginUser(creds)
+        .then((res) => {
+          console.log(res.data.data.user);
+          storeUserLocal(res.data.data.user).then(() => {
+            setLoading(false);
+            props.changeUser(res.data.data.user);
+          });
+        })
+        .catch((err) => {
+          setLoading(false);
+          showToast("Not registered");
+          RootNavigation.navigate("signup");
+        });
+    } else {
+      showToast("Invalid email/phone");
+    }
+  }
+  const showToast = (message) => {
+    ToastAndroid.showWithGravityAndOffset(
+      message,
+      ToastAndroid.LONG,
+      ToastAndroid.BOTTOM,
+      25,
+      50
+    );
+  };
+  useEffect(() => {
+    // Update the document title using the browser API
+    const showSubscription = Keyboard.addListener("keyboardDidShow", () => {
+      setFocus(true);
     });
-        return(
-            <View style={[styles.container,   styles.centerAlign,{flexDirection: 'column-reverse', flex:3}]}>
-                  <View style={[{height:'70%', width: '100%', bottom: 0, borderTopRightRadius:30, borderTopLeftRadius: 30},styles.centerAlign,  ]}>
-                  <SvgCss xml={xml} width="100%" height="100%" style={{height:'100%', width: '100%', fill: color.primary, position: "absolute"}} />
-                   <SafeAreaView style={[styles.container,{justifyContent: 'flex-end'}]}>
-                   <View  style={[styles.container,  styles.centerAlign, ]}>
-                  </View>
-                        <TouchableOpacity >
-                          {
-                            !focus?(<SvgCss xml={googleLogin} width="300px" height="60px" style={{marginBottom: 20 ,borderRadius: 10 }}  />): (<></>)
-                          }
-                        </TouchableOpacity>
-                          <TextInput
-                            style={[styles.input, {marginBottom: 10, borderColor: 'white'}]}
-                            placeholder="Email"
-                            placeholderTextColor={'#c9c9c9'}
-                            onChangeText={(val)=>{ setCreds({password:creds.password, email: val})}}
-                            keyboardType="email-address"
-                            value={creds.email}
-                           />
-                            <TextInput
-                            style={[styles.input,{marginBottom: 10, borderColor:'white'}]}
-                            placeholder="Password"
-                            value={creds.password}
-                            placeholderTextColor={'#c9c9c9'}
-                            onChangeText={(val)=>{ setCreds({password: val, email: creds.email})}}
-                            keyboardType="default"
-                           />
-                             
-                             <Button
-                               title="Login"
-                               loading={false}
-                                loadingProps={{ size: 'small', color: 'white' }}
-                                buttonStyle={{
-                                 backgroundColor: color.secondary,
-                                    borderRadius: 5,
-                                 }}
-                                  titleStyle={{   fontSize: 23 }}
-                                   containerStyle={{
-                                   marginHorizontal: 20,
-                                     height: 50,
-                                     width: 150,
-                                      marginVertical: 5,
-                              }}
-                            />
-                               <Button
-                                  containerStyle={{
-                                    width: 200,
-                                  }}
-                                  title="New User"
-                                  type="clear"
-                                  titleStyle={{ color: 'white',fontSize: 23 }}
-                                  onPress={()=>{
-                                    RootNavigation.navigate('signup');
-                                  }}
-                                />
-                  </SafeAreaView>
-                  </View >
-                  <View  style={[styles.container,  styles.centerAlign, ]}>
-                    {
-                     !focus? (<Image  style={ {width: 400, height: 200,}} source={require('../assets/logoSvg.png')} />): 
-                               (<Image  style={{ width: 180, height: 80, }} source={require('../assets/logoSvg.png')} />)
-                      }   
-                  </View>
-            </View>
-        )
-};
+    const hideSubscription = Keyboard.addListener("keyboardDidHide", () => {
+      setFocus(false);
+    });
+  }, []);
+  return (
+    <View style={[theme.container, { flexDirection: "column-reverse" }]}>
+      <SafeAreaView
+        style={[
+          theme.container,
+          theme.background,
+          {
+            justifyContent: "flex-end",
+            paddingBottom: 20,
+            width: "100%",
+            height: "70%",
+          },
+        ]}
+      >
+        <TouchableOpacity>
+          {!focus ? (
+            <SvgCss
+              xml={googleLogin}
+              width="300px"
+              height="60px"
+              style={{ marginBottom: 20, borderRadius: 10 }}
+            />
+          ) : (
+            <></>
+          )}
+          <Text style={[theme.title, { color: color.themecolor }]}>LOGIN</Text>
+        </TouchableOpacity>
+        <TextInput
+          style={[theme.input]}
+          placeholder="Email/Phone Number"
+          placeholderTextColor={"#c9c9c9"}
+          onChangeText={(val) => {
+            setCreds({ password: creds.password, email: val });
+          }}
+          keyboardType="email-address"
+          value={creds.email}
+        />
+        <TextInput
+          style={[theme.input]}
+          placeholder="Password"
+          secureTextEntry={true}
+          value={creds.password}
+          placeholderTextColor={"#c9c9c9"}
+          onChangeText={(val) => {
+            setCreds({ password: val, email: creds.email });
+          }}
+          keyboardType="default"
+        />
+
+        <Button
+          title="Login"
+          loading={loading}
+          loadingProps={{ color: color.primary, size: 30 }}
+          onPress={loginWithCreds}
+          buttonStyle={theme.buttonStyle}
+          titleStyle={theme.buttonText}
+          containerStyle={{
+            marginHorizontal: 20,
+            height: 50,
+            width: 150,
+            marginVertical: 5,
+          }}
+        />
+        <Button
+          containerStyle={{
+            width: 150,
+            borderRadius: 10,
+          }}
+          title="New User"
+          type="clear"
+          titleStyle={{ color: "white", fontSize: 23 }}
+          onPress={() => {
+            RootNavigation.navigate("signup");
+          }}
+        />
+      </SafeAreaView>
+      <View
+        style={[
+          {
+            width: "100%",
+            height: "30%",
+            alignItems: "center",
+            justifyContent: "center",
+          },
+        ]}
+      >
+        {!focus ? (
+          <Image
+            style={{ width: 400, height: 200 }}
+            source={require("../assets/icons/logo.png")}
+          />
+        ) : (
+          <Image
+            style={{ width: 250, height: 120 }}
+            source={require("../assets/icons/logo.png")}
+          />
+        )}
+      </View>
+    </View>
+  );
+}
+
+function mapStateToProps(state) {
+  return {
+    user: state.user,
+  };
+}
+function mapDispatchToProps(dispatch) {
+  return {
+    changeUser: (user) => dispatch({ type: "SET_USER", payload: user }),
+  };
+}
+export default connect(mapStateToProps, mapDispatchToProps)(AuthScreen);
